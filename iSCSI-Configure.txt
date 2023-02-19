@@ -1,0 +1,100 @@
+=============================================================================================
+                             Server Installation 
+=============================================================================================
+[root@iscsi-server ~]#  lsblk         or            # sfdisk -s 
+[root@iscsi-server ~]# yum update -y
+[root@iscsi-server ~]# yum install -y targetcli
+[root@iscsi-server ~]# targetcli
+
+/> ls
+/> /backstores/block create ltecklun1 /dev/sdb
+                   OR
+/> backstores/fileio/ create shareddata /opt/ltecklun1.img 1024M
+/> ls
+/> /iscsi create iqn.2020-01.local.server-iscsi:server
+/> ls
+/> /iscsi/iqn.2020-01.local.server-iscsi:server/tpg1/acls create iqn.2020-01.local.client-iscsi:client1
+/> ls
+/> /iscsi/iqn.2020-01.local.server-iscsi:server/tpg1/luns create /backstores/block/ltecklun1
+/> ls
+/> cd /iscsi/iqn.2020-01.local.server-iscsi:server/tpg1
+/iscsi/iqn.20...i:server/tpg1> set attribute authentication=1
+/iscsi/iqn.20...i:server/tpg1> cd acls/iqn.2020-01.local.client-iscsi:client1
+/iscsi/iqn.20...iscsi:client1> set auth userid=linuxteck
+/iscsi/iqn.20...iscsi:client1> set auth password=password@123
+/iscsi/iqn.20...iscsi:client1> get auth
+/iscsi/iqn.20...iscsi:client1> ls
+/iscsi/iqn.20...iscsi:client1> cd /
+/> saveconfig
+/> exit
+
+[root@iscsi-server ~]# systemctl restart target.service
+[root@iscsi-server ~]# systemctl status target.service
+[root@iscsi-server ~]# targetcli
+/> cd /iscsi/iqn.2020-01.local.server-iscsi:server/tpg1/portals/
+/> cd /iscsi/iqn.2020-01.local.server-iscsi:server/tpg1/portals/
+/iscsi/iqn.20.../tpg1/portals> delete 0.0.0.0 ip_port=3260
+/iscsi/iqn.20.../tpg1/portals> create 192.168.3.101
+/iscsi/iqn.20.../tpg1/portals> ls
+/> saveconfig 
+/> exit
+[root@iscsi-server ~]# ss -na | grep 3260
+[root@iscsi-server ~]# netstat -tnlp | grep 3260
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+[root@iscsi-server ~]# firewall-cmd --permanent --add-port=3260/tcp
+[root@iscsi-server ~]# firewall-cmd --reload
+[root@iscsi-server ~]# firewall-cmd --list-all
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                                OR
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+[root@iscsi-server ~]# systemctl disable firewalld.service
+[root@iscsi-server ~]# systemctl stop firewalld.service
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+[root@iscsi-server ~]# systemctl enable target.service
+[root@iscsi-server ~]# systemctl restart target.service
+[root@iscsi-server ~]# systemctl status target.service
+                     
+
+
+=============================================================================================
+                             Client Installation 
+=============================================================================================
+
+[root@iscsi-client ~]# yum update -y
+[root@iscsi-client ~]# yum install -y iscsi-initiator-utils
+[root@iscsi-client ~]# vi /etc/iscsi/initiatorname.iscsi
+                    ------------------------------------------------------
+		     InitiatorName=iqn.2020-01.local.client-iscsi:client1
+                    ------------------------------------------------------
+[root@iscsi-client ~]# systemctl restart iscsid.service
+[root@iscsi-client ~]# systemctl enable iscsid.service
+[root@iscsi-client ~]# systemctl status iscsid.service
+[root@iscsi-client ~]# vi /etc/iscsi/iscsid.conf
+                    -----------------------------------------------------------
+			node.session.auth.authmethod = CHAP
+			node.session.auth.username = linuxteck
+			node.session.auth.password = password@123
+                    -----------------------------------------------------------
+[root@iscsi-client ~]# iscsiadm --mode discoverydb --type sendtargets --portal 192.168.3.101 --discover
+[root@iscsi-client ~]# iscsiadm -m node --login
+[root@iscsi-client ~]# iscsiadm -m session -o show
+[root@iscsi-client ~]# iscsiadm --mode node -P 1
+[root@iscsi-client ~]# lsblk                  or                  # sfdisk -s
+[root@iscsi-client ~]#mkfs.xfs /dev/sdb
+[root@iscsi-client ~]#mount /dev/sdb /mnt
+[root@iscsi-client ~]#df -Th
+[root@iscsi-client ~]#mkdir /mnt/ltecklun1
+[root@iscsi-client ~]#blkid /dev/sdb
+[root@iscsi-client ~]#mount /mnt/ltecklun1                OR                   # mount -a 
+[root@iscsi-client ~]#df -HT
+[root@iscsi-client ~]#unmount /mnt/ltecklun1
+[root@iscsi-client ~]#iscsiadm --mode node --targetname iqn.2020-01.local.server-iscsi:server --portal 192.168.3.101:3260 --logout
+
+
+
+
+
+
+****************************************************************************************************
+Refer url:- https://www.linuxteck.com/how-to-configure-iscsi-target-initiator-on-rhel-centos-7-6/
+****************************************************************************************************
