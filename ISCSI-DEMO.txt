@@ -1,0 +1,153 @@
+-------------------------------------------------------------------------------------------------------
+
+
+iscsi-server.txt
+==================
+Important points to be noted before proceeding towards lab:-
+
+Small Computer System Interface(SCSI)
+
+Internet Small Computer System Interface(iSCSI)
+
+1)SCSI defines a medium(SCSI cable) and a communication protocol (SCSI protocol)
+
+2)SCSI defines a parallel bus that can connect up to 16 servers and storage devices with one another
+
+3)SCSI defines a parallel bus for the transmission of data with additional lines for the control of communication
+
+4)iSCSI-It is a protocol available for transmitting storage data traffic over TCP/IP.
+
+5)The basic idea behind iSCSI is to transmit the SCSI protocol over TCP/IP
+
+6)the difference between SCSI and iSCSI is, TCP/IP/Ethernet connection replaces the SCSI cable.
+
+7)iSCSI is a protocol for distributed disk access using SCSI commands sent over Internet Protocol (IP) networks. 
+
+
+USE CENTOS-7 Image
+
+#####on ISCSI CLIENT-#####
+
+# yum install iscsi-initiator-utils
+		->Installing The iscsi-initiator-utils packages; provide the server daemon for the Internet Small Computer System Interface (iSCSI) protocol. 
+		->Installing utility programs for managing 
+
+# cd /etc/iscsi/
+		-> Changing directory to iscsi
+
+# vim initiatorname.iscsi # change client name if required
+		-> Changing Initiator Name to "client"
+
+# systemctl restart iscsi
+		-> Starting iscsi service
+
+
+
+####on ISCSI Server##### 
+
+#add two 20GB HDD in VM
+
+# fdisk -l
+# pvcreate /dev/sdc /dev/sdb
+# vgcreate vg_iscsi /dev/sdb /dev/sdc
+# lvcreate -n lv_iscsi-disk-01 -L 1G vg_iscsi
+# lvs
+		-> In above five commands, We are cfeating logical volume named lv_iscsi-disk-01 from virtual group vg_iscsi 
+
+# yum install targetcli
+		-> administration shell for storage targets
+		-> targetcli  is  a  shell for viewing, editing, and saving the configuration of the kernel's target subsystem, also known as LIO
+		-> It enables the administrator to assign local  storage resources like local volumes(logical volume) and export them to remote systems via a iSCSI 
+
+# targetcli
+		-> This will open targetcli shell
+
+	# cd backstores/block
+			-> Going to the block directory for creating a new block
+
+	# create disk0 /dev/mapper/vg_iscsi-lv_iscsi--disk--01
+			-> Creating a new block storage named "block1" of logical volume "vg_iscsi-lv_iscsi--disk--01"
+	#cd ..
+	#cd ..
+	# cd iscsi
+			-> Going to iscsi directory
+
+	# create 
+			-> The following example uses the create command to create an IQN (iSCSI Qualified Name) with a target. 
+			-> Use the create command without any arguments to create an iSCSI target by using a default target name. By default, the target is identified by an “iqn” identifier. 
+			-> This is an iSCSI Qualified Name (IQN), which uniquely identifies a target. 
+	
+	# cd iqn.2003-01.org.linux-iscsi.server.x8664:sn.822a1311c4e6:disk0/tpg1/acls
+			-> Going to server acls	
+	
+	# create iqn.1994-05.com.redhat:db9467c1813 #client PC iscsi initiator name
+			-> Creating iqn for client initiator name 
+
+	# cd iscsi/iqn.2003-01.org.linux-iscsi.server.x8664:sn.822a1311c4e6:disk0/tpg1/luns
+			-> Going to luns
+	
+	# create /backstores/block/disk0
+			-> we need to add the Disk (disk1) we created earlier to the default TPG.
+
+	# cd
+
+	# saveconfig
+
+	exit
+
+# systemctl restart target
+
+# systemctl status target
+
+#####on ISCSI CLIENT-#####
+
+# iscsiadm --mode discoverydb --type sendtargets --portal <server_ip> --discover
+			-> On your iscsi-initiator run a discovery against the target to verify your iqn is available
+ 			-> We should get this type of output after this command ---> <server_ip>:3260,1 iqn.2003-01.org.linux-iscsi.server.x8664:sn.822a1311c4e6
+
+# iscsiadm --mode node --targetname "iqn.2003-01.org.linux-iscsi.server.x8664:sn.822a1311c4e6" --portal <server_ip> --login
+			-> The target name specified in quotes in above command may be different each time
+			-> By this command we are login into the target
+
+# cat /proc/scsi/scsi
+			-> After this command should see new iSCSI storage
+# fdisk -l
+# fdisk /dev/sdb #use b=iscsi mount disk
+	 #Press n then enter enter
+ 	 #Press key w 
+# fdisk -l
+# mkdir /mnt/disk-1
+# mkfs.ext4 /dev/sdb1
+# mount /dev/sdb1 /mnt/disk-1/
+
+
+
+output:
+--------------
+
+/> ls
+o- / ......................................................................................................................... [...]
+  o- backstores .............................................................................................................. [...]
+  | o- block .................................................................................................. [Storage Objects: 1]
+  | | o- disk0 ............................................. [/dev/mapper/vg_iscsi-lv_iscsi--disk--01 (1.0GiB) write-thru activated]
+  | |   o- alua ................................................................................................... [ALUA Groups: 1]
+  | |     o- default_tg_pt_gp ....................................................................... [ALUA state: Active/optimized]
+  | o- fileio ................................................................................................. [Storage Objects: 0]
+  | o- pscsi .................................................................................................. [Storage Objects: 0]
+  | o- ramdisk ................................................................................................ [Storage Objects: 0]
+  o- iscsi ............................................................................................................ [Targets: 1]
+  | o- iqn.2003-01.org.linux-iscsi.server.x8664:sn.822a1311c4e6 .......................................................... [TPGs: 1]
+  |   o- tpg1 ............................................................................................... [no-gen-acls, no-auth]
+  |     o- acls .......................................................................................................... [ACLs: 1]
+  |     | o- iqn.1994-05.com.redhat:db9467c1813 ................................................................... [Mapped LUNs: 1]
+  |     |   o- mapped_lun0 ................................................................................. [lun0 block/disk0 (rw)]
+  |     o- luns .......................................................................................................... [LUNs: 1]
+  |     | o- lun0 ....................................... [block/disk0 (/dev/mapper/vg_iscsi-lv_iscsi--disk--01) (default_tg_pt_gp)]
+  |     o- portals .................................................................................................... [Portals: 1]
+  |       o- 0.0.0.0:3260 ..................................................................................................... [OK]
+  o- loopback ......................................................................................................... [Targets: 0]
+/> saveconfig 
+
+
+
+ 
